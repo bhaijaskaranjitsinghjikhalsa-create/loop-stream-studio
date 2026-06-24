@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node --watch server/index.js"
+    "dev": "node --watch server/index.js",
+    "build:css": "tailwindcss -i ./server/public/tailwind.input.css -o ./server/public/tailwind.css --minify"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -19,6 +20,7 @@
     "express": "^4.21.1",
     "multer": "^1.4.5-lts.1",
     "socket.io": "^4.8.1",
-    "systeminformation": "^5.23.5"
+    "systeminformation": "^5.23.5",
+    "tailwindcss": "^3.4.14"
   }
 }

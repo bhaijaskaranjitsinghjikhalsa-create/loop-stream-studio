@@ -28,7 +28,10 @@ APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$APP_DIR"
 
 echo "==> Installing npm dependencies..."
-npm install --omit=dev
+npm install
+
+echo "==> Building Tailwind CSS..."
+npm run build:css
 
 if [ ! -f .env ]; then
   echo "==> Creating .env from template..."
