@@ -14,53 +14,106 @@
 </div>
 
 <script>
-function escapeHtml(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
 
 async function load() {
   try {
     const list = await JSK.api('/api/streams');
     const el = document.getElementById('stream-list');
+
     if (!list.length) {
-      el.innerHTML = '<div class="glass rounded-2xl p-10 text-center col-span-full"><div class="text-5xl mb-3 opacity-50">📡</div><div class="font-display text-xl font-bold mb-1">No streams yet</div><div class="text-muted text-sm mb-4">Create your first 24/7 loop stream to get started.</div><a href="/streams/new" class="btn btn-primary">Create Stream</a></div>';
+      el.innerHTML = `
+        <div class="glass rounded-2xl p-10 text-center col-span-full">
+          <div class="text-5xl mb-3 opacity-50">📡</div>
+          <div class="font-display text-xl font-bold mb-1">No streams yet</div>
+          <div class="text-muted text-sm mb-4">
+            Create your first 24/7 loop stream to get started.
+          </div>
+          <a href="/streams/new" class="btn btn-primary">Create Stream</a>
+        </div>
+      `;
       return;
     }
+
     el.innerHTML = list.map(s => {
-      const up = s.started_at ? JSK.fmtDuration((Date.now() - s.started_at) / 1000) : '';
+      const up = s.started_at
+        ? JSK.fmtDuration((Date.now() - s.started_at) / 1000)
+        : '';
+
       const badge = s.running
         ? `<span class="badge badge-live"><span class="live-dot"></span>LIVE · ${up}</span>`
         : `<span class="badge badge-idle">IDLE</span>`;
-      return `<div class="glass rounded-2xl p-5">
-        <div class="flex items-start justify-between gap-3 mb-3">
-          <a href="/streams/${s.id}" class="font-display font-bold text-lg hover:text-accent">${escapeHtml(s.name)}</a>
-          ${badge}
+
+      return `
+        <div class="glass rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 mb-3">
+            <a href="/streams/${s.id}" class="font-display font-bold text-lg hover:text-accent">
+              ${escapeHtml(s.name)}
+            </a>
+            ${badge}
+          </div>
+
+          <div class="text-xs text-muted space-y-1 mb-4">
+            <div class="truncate">📡 ${escapeHtml(s.rtmp_url)}</div>
+            <div>
+              🎬 ${s.video_ids.length} videos · ${escapeHtml(s.quality)}
+              ${s.loop_hours ? '· ⏱ ' + s.loop_hours + 'h timer' : '· ♾ infinite'}
+            </div>
+          </div>
+
+          <div class="flex gap-2">
+            ${s.running
+              ? `<button class="btn btn-danger flex-1" onclick="stop(${s.id})">⏹ Stop</button>`
+              : `<button class="btn btn-success flex-1" onclick="start(${s.id})">▶ Start</button>`
+            }
+
+            <a class="btn btn-ghost" href="/streams/${s.id}">Details</a>
+            <a class="btn btn-ghost" href="/streams/${s.id}/edit">Edit</a>
+          </div>
         </div>
-        <div class="text-xs text-muted space-y-1 mb-4">
-          <div class="truncate">📡 ${escapeHtml(s.rtmp_url)}</div>
-          <div>🎬 ${s.video_ids.length} videos · ${escapeHtml(s.quality)} ${s.loop_hours ? '· ⏱ ' + s.loop_hours + 'h timer' : '· ♾ infinite'}</div>
-        </div>
-        <div class="flex gap-2">
-          ${s.running
-            ? `<button class="btn btn-danger flex-1" onclick="stop(${s.id})">⏹ Stop</button>`
-            : `<button class="btn btn-success flex-1" onclick="start(${s.id})">▶ Start</button>`}
-          <a class="btn btn-ghost" href="/streams/${s.id}">Details</a>
-          <a class="btn btn-ghost" href="/streams/${s.id}/edit">Edit</a>
-        </div>
-      </div>`;
+      `;
     }).join('');
-  } catch (e) { JSK.toast(e.message, 'error'); }
+
+  } catch (e) {
+    console.error(e);
+    JSK.toast(e.message || 'Failed to load streams', 'error');
+  }
 }
 
 async function start(id) {
-  try { await JSK.api('/api/streams/' + id + '/start', { method: 'POST' }); JSK.toast('Starting…', 'success'); load(); }
-  catch (e) { JSK.toast(e.message, 'error'); }
-}
-async function stop(id) {
-  try { await JSK.api('/api/streams/' + id + '/stop', { method: 'POST' }); JSK.toast('Stopping…'); load(); }
-  catch (e) { JSK.toast(e.message, 'error'); }
+  try {
+    await JSK.api('/api/streams/' + id + '/start', { method: 'POST' });
+    JSK.toast('Starting…', 'success');
+    load();
+  } catch (e) {
+    JSK.toast(e.message, 'error');
+  }
 }
 
-const socket = io();
-socket.on('stream-status', () => load());
+async function stop(id) {
+  try {
+    await JSK.api('/api/streams/' + id + '/stop', { method: 'POST' });
+    JSK.toast('Stopping…');
+    load();
+  } catch (e) {
+    JSK.toast(e.message, 'error');
+  }
+}
+
+/* socket.io optional */
+if (typeof io !== 'undefined') {
+  const socket = io();
+  socket.on('stream-status', () => load());
+}
+
 load();
 setInterval(load, 5000);
 </script>
