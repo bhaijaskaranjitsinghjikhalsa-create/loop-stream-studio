@@ -1,0 +1,133 @@
+<%- include('partials/head', { title: 'Videos — JSK24Live' }) %>
+<%- include('partials/shell', { page }) %>
+
+<div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+  <div>
+    <h1 class="font-display text-3xl font-bold">Video Library</h1>
+    <p class="text-muted text-sm">Upload, rename, and manage videos for your loop streams</p>
+  </div>
+</div>
+
+<div class="glass rounded-2xl p-6 mb-6">
+  <label for="upload-input" class="block border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-accent transition" id="drop-zone">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="mx-auto text-accent mb-3"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+    <div class="font-semibold">Drop videos here or click to browse</div>
+    <div class="text-xs text-muted mt-1">MP4, MKV, MOV, FLV, TS, WebM, M4V · up to 5 GB each</div>
+    <input id="upload-input" type="file" name="videos" multiple accept="video/*,.mkv,.flv,.ts" class="hidden" />
+  </label>
+  <div id="upload-progress" class="mt-4 hidden">
+    <div class="text-sm text-muted mb-2" id="upload-status">Uploading…</div>
+    <div class="w-full h-2 bg-surface2 rounded-full overflow-hidden">
+      <div id="upload-bar" class="h-full bg-gradient-to-r from-accent to-primary2" style="width:0%"></div>
+    </div>
+  </div>
+</div>
+
+<div class="glass rounded-2xl overflow-hidden">
+  <div class="p-4 flex items-center justify-between border-b border-border">
+    <h2 class="font-display font-bold">All Videos (<span id="video-count">0</span>)</h2>
+    <input id="filter" placeholder="Search…" class="input max-w-xs" />
+  </div>
+  <div class="overflow-x-auto">
+    <table id="video-table">
+      <thead>
+        <tr><th>Name</th><th>Duration</th><th>Resolution</th><th>Size</th><th class="text-right">Actions</th></tr>
+      </thead>
+      <tbody id="video-tbody">
+        <tr><td colspan="5" class="text-muted text-center py-8">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let allVideos = [];
+
+function escapeHtml(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function loadVideos() {
+  try {
+    allVideos = await JSK.api('/api/videos');
+    render();
+  } catch (e) { JSK.toast(e.message, 'error'); }
+}
+
+function render() {
+  const filter = (document.getElementById('filter').value || '').toLowerCase();
+  const list = allVideos.filter(v => v.display_name.toLowerCase().includes(filter));
+  document.getElementById('video-count').textContent = allVideos.length;
+  const tb = document.getElementById('video-tbody');
+  if (!list.length) {
+    tb.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-8">No videos. Upload some above ↑</td></tr>';
+    return;
+  }
+  tb.innerHTML = list.map(v => `
+    <tr data-id="${v.id}">
+      <td>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-surface2 flex items-center justify-center text-accent">▶</div>
+          <input class="bg-transparent border-0 outline-none focus:bg-surface2/50 px-2 py-1 rounded font-medium w-full max-w-md" value="${escapeHtml(v.display_name)}" onchange="rename(${v.id}, this.value)" />
+        </div>
+      </td>
+      <td class="text-muted">${v.duration ? JSK.fmtDuration(v.duration) : '—'}</td>
+      <td class="text-muted">${v.width && v.height ? v.width + '×' + v.height : '—'}</td>
+      <td class="text-muted">${JSK.fmt(v.size)}</td>
+      <td class="text-right">
+        <button class="btn btn-danger" onclick="del(${v.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function rename(id, name) {
+  try { await JSK.api('/api/videos/' + id, { method: 'PATCH', body: { display_name: name } }); JSK.toast('Renamed', 'success'); loadVideos(); }
+  catch (e) { JSK.toast(e.message, 'error'); }
+}
+
+async function del(id) {
+  if (!confirm('Delete this video? This cannot be undone.')) return;
+  try { await JSK.api('/api/videos/' + id, { method: 'DELETE' }); JSK.toast('Deleted', 'success'); loadVideos(); }
+  catch (e) { JSK.toast(e.message, 'error'); }
+}
+
+document.getElementById('filter').addEventListener('input', render);
+
+// Upload
+const input = document.getElementById('upload-input');
+const drop = document.getElementById('drop-zone');
+['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('border-accent'); }));
+['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('border-accent'); }));
+drop.addEventListener('drop', ev => { ev.preventDefault(); if (ev.dataTransfer.files.length) doUpload(ev.dataTransfer.files); });
+input.addEventListener('change', () => { if (input.files.length) doUpload(input.files); });
+
+function doUpload(files) {
+  const fd = new FormData();
+  for (const f of files) fd.append('videos', f);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/videos/upload');
+  const wrap = document.getElementById('upload-progress');
+  const bar = document.getElementById('upload-bar');
+  const status = document.getElementById('upload-status');
+  wrap.classList.remove('hidden');
+  status.textContent = `Uploading ${files.length} file(s)…`;
+  xhr.upload.onprogress = e => { if (e.lengthComputable) bar.style.width = ((e.loaded/e.total)*100).toFixed(1) + '%'; };
+  xhr.onload = () => {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      JSK.toast('Upload complete', 'success');
+      bar.style.width = '100%';
+      setTimeout(() => { wrap.classList.add('hidden'); bar.style.width = '0%'; }, 800);
+      loadVideos();
+    } else {
+      JSK.toast('Upload failed: ' + xhr.statusText, 'error');
+      wrap.classList.add('hidden');
+    }
+  };
+  xhr.onerror = () => { JSK.toast('Upload error', 'error'); wrap.classList.add('hidden'); };
+  xhr.send(fd);
+  input.value = '';
+}
+
+loadVideos();
+</script>
+
+<%- include('partials/foot') %>

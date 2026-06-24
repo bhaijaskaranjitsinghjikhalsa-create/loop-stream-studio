@@ -1,0 +1,153 @@
+<%- include('partials/head', { title: 'Edit Stream — JSK24Live' }) %>
+<%- include('partials/shell', { page }) %>
+
+<div class="flex items-center gap-3 mb-6">
+  <a href="/streams" class="text-muted hover:text-ink">← Streams</a>
+</div>
+
+<div class="glass rounded-2xl p-6 max-w-3xl">
+  <h1 class="font-display text-2xl font-bold mb-1" id="form-title">New Stream</h1>
+  <p class="text-muted text-sm mb-6">Configure your 24/7 loop broadcast</p>
+
+  <form id="stream-form" class="grid gap-4">
+    <div>
+      <label class="text-xs uppercase tracking-wider text-muted font-semibold">Stream Name</label>
+      <input name="name" class="input mt-1" required placeholder="e.g. YouTube Music 24/7" />
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="text-xs uppercase tracking-wider text-muted font-semibold">RTMP Server URL</label>
+        <input name="rtmp_url" class="input mt-1" required placeholder="rtmp://a.rtmp.youtube.com/live2" list="rtmp-presets" />
+        <datalist id="rtmp-presets">
+          <option value="rtmp://a.rtmp.youtube.com/live2">YouTube Live</option>
+          <option value="rtmps://live-api-s.facebook.com:443/rtmp">Facebook Live</option>
+          <option value="rtmp://live.twitch.tv/app">Twitch</option>
+        </datalist>
+      </div>
+      <div>
+        <label class="text-xs uppercase tracking-wider text-muted font-semibold">Stream Key</label>
+        <input name="stream_key" class="input mt-1" required placeholder="paste-your-key-here" />
+      </div>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="text-xs uppercase tracking-wider text-muted font-semibold">Quality</label>
+        <select name="quality" id="quality-select" class="select mt-1"></select>
+      </div>
+      <div>
+        <label class="text-xs uppercase tracking-wider text-muted font-semibold">Loop Duration</label>
+        <select name="loop_hours" class="select mt-1">
+          <option value="0">♾ Infinite (run forever)</option>
+          <% for (let h of [1,2,3,4,6,8,12,18,24,36,48,72]) { %>
+            <option value="<%= h %>"><%= h %> hour<%= h>1?'s':'' %> then auto-stop</option>
+          <% } %>
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <label class="text-xs uppercase tracking-wider text-muted font-semibold flex items-center justify-between">
+        <span>Playlist</span>
+        <span class="text-muted normal-case">Click videos to add · drag to reorder</span>
+      </label>
+      <div class="grid sm:grid-cols-2 gap-4 mt-2">
+        <div>
+          <div class="text-xs text-muted mb-1">Available videos</div>
+          <div id="available" class="glass rounded-xl p-2 max-h-72 overflow-y-auto space-y-1 min-h-[12rem]"></div>
+        </div>
+        <div>
+          <div class="text-xs text-muted mb-1">Selected (play order)</div>
+          <div id="selected" class="glass rounded-xl p-2 max-h-72 overflow-y-auto space-y-1 min-h-[12rem]"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-primary" type="submit" id="save-btn">Save Stream</button>
+      <a href="/streams" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+const streamId = <%- streamId ? streamId : 'null' %>;
+let videos = [], selectedIds = [], presets = [];
+
+function escapeHtml(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function renderPlaylist() {
+  const sel = document.getElementById('selected');
+  const av = document.getElementById('available');
+  const selectedSet = new Set(selectedIds);
+  av.innerHTML = videos.filter(v => !selectedSet.has(v.id)).map(v =>
+    `<div class="flex items-center justify-between p-2 rounded hover:bg-surface2/60 cursor-pointer" onclick="addVid(${v.id})">
+      <div class="truncate text-sm">${escapeHtml(v.display_name)}</div>
+      <div class="text-xs text-muted ml-2">${v.duration ? JSK.fmtDuration(v.duration) : ''}</div>
+    </div>`).join('') || '<div class="text-muted text-xs p-3 text-center">No videos available. <a href="/videos" class="text-accent">Upload some</a></div>';
+  sel.innerHTML = selectedIds.map((id, i) => {
+    const v = videos.find(x => x.id === id);
+    if (!v) return '';
+    return `<div class="flex items-center gap-2 p-2 rounded bg-surface2/40 border border-border" draggable="true" data-idx="${i}">
+      <span class="text-xs text-muted w-5">${i+1}</span>
+      <div class="truncate text-sm flex-1">${escapeHtml(v.display_name)}</div>
+      <button type="button" class="text-muted hover:text-accent" onclick="moveUp(${i})">↑</button>
+      <button type="button" class="text-muted hover:text-accent" onclick="moveDown(${i})">↓</button>
+      <button type="button" class="text-muted hover:text-red-400" onclick="removeVid(${i})">✕</button>
+    </div>`;
+  }).join('') || '<div class="text-muted text-xs p-3 text-center">Click videos on the left to add them</div>';
+}
+function addVid(id) { selectedIds.push(id); renderPlaylist(); }
+function removeVid(i) { selectedIds.splice(i,1); renderPlaylist(); }
+function moveUp(i) { if (i>0) { [selectedIds[i-1], selectedIds[i]] = [selectedIds[i], selectedIds[i-1]]; renderPlaylist(); } }
+function moveDown(i) { if (i<selectedIds.length-1) { [selectedIds[i+1], selectedIds[i]] = [selectedIds[i], selectedIds[i+1]]; renderPlaylist(); } }
+
+async function init() {
+  [videos, presets] = await Promise.all([JSK.api('/api/videos'), JSK.api('/api/streams/presets')]);
+  const qs = document.getElementById('quality-select');
+  qs.innerHTML = presets.map(p => `<option value="${p.key}">${p.label}</option>`).join('');
+  if (streamId) {
+    document.getElementById('form-title').textContent = 'Edit Stream';
+    const s = await JSK.api('/api/streams/' + streamId);
+    const f = document.forms[0];
+    f.name.value = s.name;
+    f.rtmp_url.value = s.rtmp_url;
+    f.stream_key.value = s.stream_key;
+    f.quality.value = s.quality;
+    f.loop_hours.value = s.loop_hours;
+    selectedIds = s.video_ids.slice();
+  }
+  renderPlaylist();
+}
+
+document.getElementById('stream-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target;
+  const body = {
+    name: f.name.value,
+    rtmp_url: f.rtmp_url.value,
+    stream_key: f.stream_key.value,
+    quality: f.quality.value,
+    loop_hours: parseInt(f.loop_hours.value, 10) || 0,
+    video_ids: selectedIds,
+  };
+  if (!body.video_ids.length) return JSK.toast('Add at least one video to the playlist', 'error');
+  try {
+    if (streamId) {
+      await JSK.api('/api/streams/' + streamId, { method: 'PUT', body });
+      JSK.toast('Saved', 'success');
+    } else {
+      const r = await JSK.api('/api/streams', { method: 'POST', body });
+      JSK.toast('Created', 'success');
+      window.location = '/streams/' + r.id;
+      return;
+    }
+    window.location = '/streams';
+  } catch (err) { JSK.toast(err.message, 'error'); }
+});
+
+init();
+</script>
+
+<%- include('partials/foot') %>
