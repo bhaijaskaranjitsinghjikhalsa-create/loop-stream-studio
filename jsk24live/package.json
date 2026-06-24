@@ -1,0 +1,24 @@
+{
+  "name": "jsk24live",
+  "version": "1.0.0",
+  "description": "JSK24Live - 24/7 Loop Streaming Panel for RTMP destinations (YouTube, Facebook, Twitch, custom)",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.21.1",
+    "multer": "^1.4.5-lts.1",
+    "socket.io": "^4.8.1",
+    "systeminformation": "^5.23.5"
+  }
+}
