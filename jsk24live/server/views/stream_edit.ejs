@@ -104,9 +104,20 @@ function moveUp(i) { if (i>0) { [selectedIds[i-1], selectedIds[i]] = [selectedId
 function moveDown(i) { if (i<selectedIds.length-1) { [selectedIds[i+1], selectedIds[i]] = [selectedIds[i], selectedIds[i+1]]; renderPlaylist(); } }
 
 async function init() {
-  [videos, presets] = await Promise.all([JSK.api('/api/videos'), JSK.api('/api/streams/presets')]);
   const qs = document.getElementById('quality-select');
-  qs.innerHTML = presets.map(p => `<option value="${p.key}">${p.label}</option>`).join('');
+  try {
+    [videos, presets] = await Promise.all([JSK.api('/api/videos'), JSK.api('/api/streams/presets')]);
+  } catch (e) {
+    JSK.toast('Load failed: ' + e.message, 'error');
+    qs.innerHTML = `<option value="">Failed: ${e.message}</option>`;
+    document.getElementById('available').innerHTML = `<div class="text-red-400 text-xs p-3 text-center">Failed: ${e.message}</div>`;
+    return;
+  }
+  if (!Array.isArray(presets) || !presets.length) {
+    qs.innerHTML = '<option value="copy">Copy (no transcode)</option><option value="720p">720p</option><option value="1080p">1080p</option>';
+  } else {
+    qs.innerHTML = presets.map(p => `<option value="${p.key}">${p.label}</option>`).join('');
+  }
   if (streamId) {
     document.getElementById('form-title').textContent = 'Edit Stream';
     const s = await JSK.api('/api/streams/' + streamId);

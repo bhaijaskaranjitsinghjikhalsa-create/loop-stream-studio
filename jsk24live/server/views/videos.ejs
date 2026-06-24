@@ -20,6 +20,7 @@
     <div class="w-full h-2 bg-surface2 rounded-full overflow-hidden">
       <div id="upload-bar" class="h-full bg-gradient-to-r from-accent to-primary2" style="width:0%"></div>
     </div>
+    <div class="text-xs text-muted mt-2">Upload jaari rahega bhaven tussi koi hor page kholo (same browser window).</div>
   </div>
 </div>
 
@@ -46,10 +47,15 @@ let allVideos = [];
 function escapeHtml(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 async function loadVideos() {
+  const tb = document.getElementById('video-tbody');
   try {
     allVideos = await JSK.api('/api/videos');
+    if (!Array.isArray(allVideos)) throw new Error('Unexpected response');
     render();
-  } catch (e) { JSK.toast(e.message, 'error'); }
+  } catch (e) {
+    JSK.toast(e.message, 'error');
+    tb.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-400">Failed to load videos: ${escapeHtml(e.message)} <button class="btn btn-ghost ml-2" onclick="loadVideos()">Retry</button></td></tr>`;
+  }
 }
 
 function render() {
@@ -92,38 +98,72 @@ async function del(id) {
 
 document.getElementById('filter').addEventListener('input', render);
 
-// Upload
+// ---- Background upload via SharedWorker (persists across page navigations) ----
 const input = document.getElementById('upload-input');
 const drop = document.getElementById('drop-zone');
+const wrap = document.getElementById('upload-progress');
+const bar = document.getElementById('upload-bar');
+const status = document.getElementById('upload-status');
+
 ['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('border-accent'); }));
 ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('border-accent'); }));
 drop.addEventListener('drop', ev => { ev.preventDefault(); if (ev.dataTransfer.files.length) doUpload(ev.dataTransfer.files); });
 input.addEventListener('change', () => { if (input.files.length) doUpload(input.files); });
 
-function doUpload(files) {
-  const fd = new FormData();
-  for (const f of files) fd.append('videos', f);
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', '/api/videos/upload');
-  const wrap = document.getElementById('upload-progress');
-  const bar = document.getElementById('upload-bar');
-  const status = document.getElementById('upload-status');
+let uploadPort = null;
+const supportsShared = (typeof SharedWorker !== 'undefined');
+
+function connectWorker() {
+  if (!supportsShared) return null;
+  try {
+    const w = new SharedWorker('/static/upload-worker.js');
+    w.port.onmessage = onWorkerMsg;
+    w.port.start();
+    w.port.postMessage({ type: 'list' });
+    return w.port;
+  } catch (e) { console.warn('SharedWorker failed', e); return null; }
+}
+
+function renderJobs(jobs) {
+  if (!jobs.length) { wrap.classList.add('hidden'); bar.style.width = '0%'; return; }
   wrap.classList.remove('hidden');
-  status.textContent = `Uploading ${files.length} file(s)…`;
-  xhr.upload.onprogress = e => { if (e.lengthComputable) bar.style.width = ((e.loaded/e.total)*100).toFixed(1) + '%'; };
-  xhr.onload = () => {
-    if (xhr.status >= 200 && xhr.status < 300) {
-      JSK.toast('Upload complete', 'success');
-      bar.style.width = '100%';
-      setTimeout(() => { wrap.classList.add('hidden'); bar.style.width = '0%'; }, 800);
-      loadVideos();
-    } else {
-      JSK.toast('Upload failed: ' + xhr.statusText, 'error');
-      wrap.classList.add('hidden');
-    }
-  };
-  xhr.onerror = () => { JSK.toast('Upload error', 'error'); wrap.classList.add('hidden'); };
-  xhr.send(fd);
+  const j = jobs[0];
+  const pct = j.total ? Math.min(100, (j.loaded / j.total) * 100) : 0;
+  bar.style.width = pct.toFixed(1) + '%';
+  status.textContent = `${j.status === 'done' ? 'Finalising' : 'Uploading'} ${j.name} · ${pct.toFixed(0)}%${jobs.length>1?` (+${jobs.length-1} more)`:''}`;
+}
+
+function onWorkerMsg(ev) {
+  const m = ev.data || {};
+  if (m.type === 'list') renderJobs(m.jobs);
+  else if (m.type === 'progress' || m.type === 'done' || m.type === 'error') {
+    uploadPort && uploadPort.postMessage({ type: 'list' });
+    if (m.type === 'done') { JSK.toast('Upload complete', 'success'); loadVideos(); }
+    if (m.type === 'error') JSK.toast('Upload failed: ' + (m.error||''), 'error');
+  }
+}
+
+uploadPort = connectWorker();
+
+function doUpload(files) {
+  const arr = Array.from(files);
+  if (uploadPort) {
+    uploadPort.postMessage({ type: 'start', files: arr });
+  } else {
+    const fd = new FormData();
+    for (const f of arr) fd.append('videos', f);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/videos/upload');
+    wrap.classList.remove('hidden');
+    status.textContent = `Uploading ${arr.length} file(s)…`;
+    xhr.upload.onprogress = e => { if (e.lengthComputable) bar.style.width = ((e.loaded/e.total)*100).toFixed(1) + '%'; };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) { JSK.toast('Upload complete', 'success'); bar.style.width = '100%'; setTimeout(() => { wrap.classList.add('hidden'); bar.style.width = '0%'; }, 800); loadVideos(); }
+      else { JSK.toast('Upload failed: ' + xhr.statusText, 'error'); wrap.classList.add('hidden'); }
+    };
+    xhr.onerror = () => { JSK.toast('Upload error', 'error'); wrap.classList.add('hidden'); };
+    xhr.send(fd);
+  }
   input.value = '';
 }
 
