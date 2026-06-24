@@ -98,20 +98,41 @@ async function del() {
 }
 
 function appendLog(line) {
-  const log = document.getElementById('log');
-  const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
-  log.textContent += line + '\n';
-  if (atBottom) log.scrollTop = log.scrollHeight;
+const log = document.getElementById('log');
+const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
+log.textContent += line + '\n';
+if (atBottom) log.scrollTop = log.scrollHeight;
 }
 
+// Socket.IO optional (page crash na hove)
+if (typeof io !== 'undefined') {
 const socket = io();
-socket.on('connect', () => socket.emit('watch-stream', streamId));
-socket.on('log', d => { if (d.id == streamId) appendLog(d.line); });
-socket.on('stream-status', d => { if (d.id == streamId) load(); });
 
+socket.on('connect', () => {
+socket.emit('watch-stream', streamId);
+});
+
+socket.on('log', d => {
+if (d.id == streamId) appendLog(d.line);
+});
+
+socket.on('stream-status', d => {
+if (d.id == streamId) load();
+});
+} else {
+console.warn('Socket.IO client not loaded');
+}
+
+// Initial load
 load();
-setInterval(() => { if (data && data.running) render(); }, 1000);
-setInterval(load, 5000);
-</script>
+
+// Update uptime every second
+setInterval(() => {
+if (data && data.running) render();
+}, 1000);
+
+// Refresh stream data every 5 seconds
+setInterval(load, 5000); </script>
 
 <%- include('partials/foot') %>
+
