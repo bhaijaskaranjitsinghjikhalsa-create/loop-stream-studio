@@ -1,0 +1,117 @@
+<%- include('partials/head', { title: 'Stream — JSK24Live' }) %>
+<%- include('partials/shell', { page }) %>
+
+<div class="flex items-center gap-3 mb-6">
+  <a href="/streams" class="text-muted hover:text-ink">← Streams</a>
+</div>
+
+<div class="flex items-start justify-between mb-6 flex-wrap gap-4">
+  <div>
+    <h1 class="font-display text-3xl font-bold" id="title">…</h1>
+    <div class="text-muted text-sm mt-1" id="subtitle"></div>
+  </div>
+  <div class="flex gap-2" id="actions"></div>
+</div>
+
+<div class="grid lg:grid-cols-3 gap-4 mb-6">
+  <div class="glass rounded-2xl p-4">
+    <div class="text-xs uppercase tracking-wider text-muted font-semibold">Status</div>
+    <div class="mt-2" id="status-badge">—</div>
+  </div>
+  <div class="glass rounded-2xl p-4">
+    <div class="text-xs uppercase tracking-wider text-muted font-semibold">Uptime</div>
+    <div class="mt-2 font-display font-bold text-xl" id="uptime-val">—</div>
+  </div>
+  <div class="glass rounded-2xl p-4">
+    <div class="text-xs uppercase tracking-wider text-muted font-semibold">Quality</div>
+    <div class="mt-2 font-display font-bold text-xl" id="quality-val">—</div>
+  </div>
+</div>
+
+<div class="glass rounded-2xl p-5 mb-6">
+  <div class="grid sm:grid-cols-2 gap-3 text-sm">
+    <div class="flex justify-between gap-2"><span class="text-muted">RTMP Server</span><span class="truncate text-right" id="info-rtmp">—</span></div>
+    <div class="flex justify-between gap-2"><span class="text-muted">Stream Key</span><span class="font-mono text-right" id="info-key">—</span></div>
+    <div class="flex justify-between gap-2"><span class="text-muted">Videos</span><span id="info-videos">—</span></div>
+    <div class="flex justify-between gap-2"><span class="text-muted">Loop</span><span id="info-loop">—</span></div>
+  </div>
+</div>
+
+<div class="glass rounded-2xl p-5">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="font-display font-bold text-xl">Live ffmpeg log</h2>
+    <button class="btn btn-ghost" onclick="document.getElementById('log').innerHTML=''">Clear</button>
+  </div>
+  <pre id="log" class="log-console"></pre>
+</div>
+
+<script>
+const streamId = <%- streamId %>;
+let data = null;
+
+function escapeHtml(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function mask(k) { return k && k.length > 6 ? k.slice(0,3) + '••••' + k.slice(-3) : '••••'; }
+
+function render() {
+  document.getElementById('title').textContent = data.name;
+  document.getElementById('subtitle').textContent = 'Created ' + new Date(data.created_at * 1000).toLocaleString();
+  document.getElementById('info-rtmp').textContent = data.rtmp_url;
+  document.getElementById('info-key').textContent = mask(data.stream_key);
+  document.getElementById('info-videos').textContent = data.video_ids.length + ' in playlist';
+  document.getElementById('info-loop').textContent = data.loop_hours ? data.loop_hours + 'h timer' : 'Infinite';
+  document.getElementById('quality-val').textContent = data.quality;
+
+  const running = data.running;
+  const badge = running
+    ? '<span class="badge badge-live"><span class="live-dot"></span>LIVE</span>'
+    : '<span class="badge badge-idle">IDLE</span>';
+  document.getElementById('status-badge').innerHTML = badge;
+  document.getElementById('uptime-val').textContent = running && data.started_at
+    ? JSK.fmtDuration((Date.now() - data.started_at) / 1000)
+    : '—';
+
+  document.getElementById('actions').innerHTML = running
+    ? `<button class="btn btn-danger" onclick="act('stop')">⏹ Stop Stream</button>`
+    : `<button class="btn btn-success" onclick="act('start')">▶ Start Stream</button>
+       <a class="btn btn-ghost" href="/streams/${data.id}/edit">Edit</a>
+       <button class="btn btn-danger" onclick="del()">Delete</button>`;
+}
+
+async function load() {
+  try {
+    data = await JSK.api('/api/streams/' + streamId);
+    render();
+    if (data.runtime && data.runtime.logs && document.getElementById('log').children.length === 0) {
+      const log = document.getElementById('log');
+      data.runtime.logs.forEach(l => appendLog(l.m));
+    }
+  } catch (e) { JSK.toast(e.message, 'error'); }
+}
+async function act(what) {
+  try { await JSK.api('/api/streams/' + streamId + '/' + what, { method: 'POST' }); load(); }
+  catch (e) { JSK.toast(e.message, 'error'); }
+}
+async function del() {
+  if (!confirm('Delete this stream?')) return;
+  try { await JSK.api('/api/streams/' + streamId, { method: 'DELETE' }); window.location = '/streams'; }
+  catch (e) { JSK.toast(e.message, 'error'); }
+}
+
+function appendLog(line) {
+  const log = document.getElementById('log');
+  const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
+  log.textContent += line + '\n';
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+const socket = io();
+socket.on('connect', () => socket.emit('watch-stream', streamId));
+socket.on('log', d => { if (d.id == streamId) appendLog(d.line); });
+socket.on('stream-status', d => { if (d.id == streamId) load(); });
+
+load();
+setInterval(() => { if (data && data.running) render(); }, 1000);
+setInterval(load, 5000);
+</script>
+
+<%- include('partials/foot') %>

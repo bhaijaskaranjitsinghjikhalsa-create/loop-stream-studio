@@ -1,0 +1,109 @@
+<%- include('partials/head', { title: 'Dashboard — JSK24Live' }) %>
+<%- include('partials/shell', { page }) %>
+
+<div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+  <div>
+    <h1 class="font-display text-3xl font-bold">Dashboard</h1>
+    <p class="text-muted text-sm">Live system stats and active streams</p>
+  </div>
+  <div class="flex gap-2">
+    <a href="/streams/new" class="btn btn-primary">+ New Stream</a>
+  </div>
+</div>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="glass rounded-2xl p-5 stat-card">
+    <div class="text-xs uppercase tracking-wider text-muted font-semibold">CPU Load</div>
+    <div class="value mt-2" id="stat-cpu">—</div>
+    <div class="text-xs text-muted mt-1" id="stat-cpu-sub">— cores</div>
+  </div>
+  <div class="glass rounded-2xl p-5 stat-card">
+    <div class="text-xs uppercase tracking-wider text-muted font-semibold">RAM</div>
+    <div class="value mt-2" id="stat-mem">—</div>
+    <div class="text-xs text-muted mt-1" id="stat-mem-sub">—</div>
+  </div>
+  <div class="glass rounded-2xl p-5 stat-card">
+    <div class="text-xs uppercase tracking-wider text-muted font-semibold">Disk</div>
+    <div class="value mt-2" id="stat-disk">—</div>
+    <div class="text-xs text-muted mt-1" id="stat-disk-sub">—</div>
+  </div>
+  <div class="glass rounded-2xl p-5 stat-card">
+    <div class="text-xs uppercase tracking-wider text-muted font-semibold">Network</div>
+    <div class="value mt-2 !text-xl" id="stat-net">—</div>
+    <div class="text-xs text-muted mt-1" id="stat-net-sub">↓ — / ↑ —</div>
+  </div>
+</div>
+
+<div class="glass rounded-2xl p-5 mb-6">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="font-display font-bold text-xl">Active Streams</h2>
+    <a href="/streams" class="text-sm text-accent hover:underline">View all →</a>
+  </div>
+  <div id="active-streams" class="grid md:grid-cols-2 gap-3">
+    <div class="text-muted text-sm">Loading…</div>
+  </div>
+</div>
+
+<div class="glass rounded-2xl p-5">
+  <h2 class="font-display font-bold text-xl mb-3">System</h2>
+  <div class="grid sm:grid-cols-2 gap-3 text-sm">
+    <div class="flex justify-between"><span class="text-muted">Hostname</span><span id="sys-host">—</span></div>
+    <div class="flex justify-between"><span class="text-muted">Platform</span><span id="sys-platform">—</span></div>
+    <div class="flex justify-between"><span class="text-muted">Uptime</span><span id="sys-uptime">—</span></div>
+    <div class="flex justify-between"><span class="text-muted">Media Storage</span><span id="sys-media">—</span></div>
+  </div>
+</div>
+
+<script>
+async function refreshStats() {
+  try {
+    const s = await JSK.api('/api/stats');
+    document.getElementById('stat-cpu').textContent = s.cpu.load.toFixed(1) + '%';
+    document.getElementById('stat-cpu-sub').textContent = s.cpu.cores + ' cores';
+    const memPct = (s.mem.used / s.mem.total) * 100;
+    document.getElementById('stat-mem').textContent = memPct.toFixed(0) + '%';
+    document.getElementById('stat-mem-sub').textContent = JSK.fmt(s.mem.used) + ' / ' + JSK.fmt(s.mem.total);
+    const diskPct = s.disk.total ? (s.disk.used / s.disk.total) * 100 : 0;
+    document.getElementById('stat-disk').textContent = diskPct.toFixed(0) + '%';
+    document.getElementById('stat-disk-sub').textContent = JSK.fmt(s.disk.used) + ' / ' + JSK.fmt(s.disk.total);
+    document.getElementById('stat-net').textContent = JSK.fmtBps(s.net.rx_bps + s.net.tx_bps);
+    document.getElementById('stat-net-sub').textContent = '↓ ' + JSK.fmtBps(s.net.rx_bps) + '  ↑ ' + JSK.fmtBps(s.net.tx_bps);
+    document.getElementById('sys-host').textContent = s.hostname;
+    document.getElementById('sys-platform').textContent = s.platform;
+    document.getElementById('sys-uptime').textContent = JSK.fmtDuration(s.uptime);
+    document.getElementById('sys-media').textContent = JSK.fmt(s.media_size);
+  } catch (e) { /* ignore */ }
+}
+
+async function refreshActive() {
+  try {
+    const list = await JSK.api('/api/streams');
+    const act = list.filter(s => s.running);
+    const el = document.getElementById('active-streams');
+    if (!act.length) {
+      el.innerHTML = '<div class="text-muted text-sm col-span-full p-4 text-center">No active streams. <a href="/streams/new" class="text-accent hover:underline">Create one →</a></div>';
+      return;
+    }
+    el.innerHTML = act.map(s => {
+      const up = s.started_at ? JSK.fmtDuration((Date.now() - s.started_at) / 1000) : '—';
+      return `<a href="/streams/${s.id}" class="block p-4 rounded-xl bg-surface2/40 border border-border hover:border-accent transition">
+        <div class="flex items-center justify-between mb-1">
+          <div class="font-semibold truncate">${escapeHtml(s.name)}</div>
+          <span class="badge badge-live"><span class="live-dot"></span>LIVE</span>
+        </div>
+        <div class="text-xs text-muted">${escapeHtml(s.quality)} · ${s.video_ids.length} videos · ${up}</div>
+      </a>`;
+    }).join('');
+  } catch (e) {}
+}
+
+function escapeHtml(s) {
+  return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+refreshStats(); refreshActive();
+setInterval(refreshStats, 2000);
+setInterval(refreshActive, 4000);
+</script>
+
+<%- include('partials/foot') %>

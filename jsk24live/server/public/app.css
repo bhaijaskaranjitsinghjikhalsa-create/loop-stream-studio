@@ -1,0 +1,150 @@
+/* Custom additions on top of Tailwind */
+body {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(217, 70, 239, 0.18), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(168, 85, 247, 0.18), transparent 60%),
+    #0f0420;
+  background-attachment: fixed;
+}
+
+.glass {
+  background: linear-gradient(145deg, rgba(42, 18, 87, 0.7), rgba(28, 11, 58, 0.7));
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #ec4899, #a855f7);
+  color: white;
+  box-shadow: 0 6px 20px -8px rgba(217, 70, 239, 0.6);
+}
+.btn-primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  background: rgba(168, 85, 247, 0.12);
+  color: #fae8ff;
+  border-color: rgba(168, 85, 247, 0.3);
+}
+.btn-ghost:hover {
+  background: rgba(168, 85, 247, 0.22);
+}
+.btn-danger {
+  background: rgba(244, 63, 94, 0.18);
+  color: #fda4af;
+  border-color: rgba(244, 63, 94, 0.4);
+}
+.btn-danger:hover { background: rgba(244, 63, 94, 0.32); }
+.btn-success {
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+  color: white;
+}
+
+.input, .select, .textarea {
+  width: 100%;
+  background: rgba(15, 4, 32, 0.6);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  color: #fae8ff;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border 0.15s;
+}
+.input:focus, .select:focus, .textarea:focus {
+  border-color: #d946ef;
+  box-shadow: 0 0 0 3px rgba(217, 70, 239, 0.2);
+}
+
+.live-dot {
+  width: 8px; height: 8px; border-radius: 9999px;
+  background: #ec4899;
+  box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.7);
+  animation: pulseDot 1.5s infinite;
+  display: inline-block;
+}
+@keyframes pulseDot {
+  0% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(236, 72, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0); }
+}
+
+.log-console {
+  background: #08001a;
+  color: #d8c8ff;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  max-height: 480px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Sidebar */
+.sidenav a {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: 0.75rem;
+  color: #c4a8e8;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.sidenav a:hover { background: rgba(168, 85, 247, 0.12); color: #fae8ff; }
+.sidenav a.active {
+  background: linear-gradient(135deg, rgba(217,70,239,0.2), rgba(168,85,247,0.2));
+  color: #fae8ff;
+  border: 1px solid rgba(217, 70, 239, 0.4);
+}
+
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 0.75rem 1rem; text-align: left; }
+th { color: #c4a8e8; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+tbody tr { border-top: 1px solid rgba(168, 85, 247, 0.15); }
+tbody tr:hover { background: rgba(168, 85, 247, 0.05); }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.3); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(168, 85, 247, 0.5); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-live { background: rgba(236, 72, 153, 0.2); color: #fbcfe8; border: 1px solid rgba(236, 72, 153, 0.5); }
+.badge-idle { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3); }
+.badge-starting { background: rgba(251, 191, 36, 0.15); color: #fde68a; border: 1px solid rgba(251, 191, 36, 0.4); }
+
+.stat-card .value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ec4899, #a855f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
